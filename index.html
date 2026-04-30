@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clasificador de Sentimientos - Productos Tecnologicos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="gentle-ai.js"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+        }
+        .card-glass {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        .positive-glow {
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.3);
+        }
+        .negative-glow {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+        }
+        .neutral-glow {
+            box-shadow: 0 0 20px rgba(234, 179, 8, 0.3);
+        }
+        .progress-bar {
+            transition: width 0.5s ease-in-out;
+        }
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .result-enter {
+            animation: slideIn 0.4s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen text-slate-200 font-sans">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
+                Clasificador de Sentimientos
+            </h1>
+            <p class="text-slate-400 text-lg">Red Neuronal para Analisis de Opiniones sobre Productos Tecnologicos</p>
+            <div class="flex items-center justify-center gap-2 mt-3">
+                <span class="pulse-dot w-2 h-2 bg-green-400 rounded-full" id="statusDot"></span>
+                <span class="text-sm text-slate-500" id="statusText">Modelo sin entrenar</span>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Column: Training Panel -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- Hyperparameters Card -->
+                <div class="card-glass rounded-xl p-5">
+                    <h2 class="text-xl font-semibold text-blue-300 mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                        Hiperparametros
+                    </h2>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">Learning Rate</label>
+                            <select id="learningRate" class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-sm focus:border-blue-400 focus:outline-none">
+                                <option value="0.1">0.1 (Alto)</option>
+                                <option value="0.01" selected>0.01 (Medio)</option>
+                                <option value="0.001">0.001 (Bajo)</option>
+                                <option value="0.0001">0.0001 (Muy bajo)</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">Epochs: <span id="epochsValue" class="text-blue-300">50</span></label>
+                            <input type="range" id="epochs" min="10" max="200" value="50" step="10" 
+                                   class="w-full accent-blue-400">
+                            <div class="flex justify-between text-xs text-slate-500 mt-1">
+                                <span>10</span><span>200</span>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm text-slate-400 mb-1">Neuronas Capa Oculta: <span id="unitsValue" class="text-blue-300">16</span></label>
+                            <input type="range" id="hiddenUnits" min="8" max="64" value="16" step="8"
+                                   class="w-full accent-purple-400">
+                            <div class="flex justify-between text-xs text-slate-500 mt-1">
+                                <span>8</span><span>64</span>
+                            </div>
+                        </div>
+
+                        <button id="trainBtn" class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            Entrenar Modelo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Training Metrics Card -->
+                <div class="card-glass rounded-xl p-5">
+                    <h2 class="text-xl font-semibold text-green-300 mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                        Metricas de Entrenamiento
+                    </h2>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="bg-slate-800 rounded-lg p-3 text-center">
+                            <p class="text-xs text-slate-500">Loss Final</p>
+                            <p class="text-xl font-bold text-yellow-400" id="finalLoss">--</p>
+                        </div>
+                        <div class="bg-slate-800 rounded-lg p-3 text-center">
+                            <p class="text-xs text-slate-500">Accuracy Final</p>
+                            <p class="text-xl font-bold text-green-400" id="finalAccuracy">--</p>
+                        </div>
+                        <div class="bg-slate-800 rounded-lg p-3 text-center">
+                            <p class="text-xs text-slate-500">Muestras</p>
+                            <p class="text-xl font-bold text-blue-400" id="sampleCount">--</p>
+                        </div>
+                        <div class="bg-slate-800 rounded-lg p-3 text-center">
+                            <p class="text-xs text-slate-500">Vocabulario</p>
+                            <p class="text-xl font-bold text-purple-400" id="vocabSize">--</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center Column: Training Chart -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Chart Card -->
+                <div class="card-glass rounded-xl p-5">
+                    <h2 class="text-xl font-semibold text-purple-300 mb-4">Progreso del Entrenamiento</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <p class="text-sm text-slate-400 mb-2 text-center">Loss por Epoch</p>
+                            <canvas id="lossChart" height="200"></canvas>
+                        </div>
+                        <div>
+                            <p class="text-sm text-slate-400 mb-2 text-center">Accuracy por Epoch</p>
+                            <canvas id="accuracyChart" height="200"></canvas>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <p class="text-sm text-slate-400 mb-2">Epoch: <span id="currentEpoch" class="text-blue-300">0</span> / <span id="totalEpochs">50</span></p>
+                        <div class="w-full bg-slate-700 rounded-full h-2">
+                            <div id="trainingProgress" class="progress-bar bg-blue-500 h-2 rounded-full" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dataset Card -->
+                <div class="card-glass rounded-xl p-5">
+                    <h2 class="text-xl font-semibold text-orange-300 mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+                        Dataset de Entrenamiento
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto pr-2" id="datasetDisplay">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inference Section -->
+        <div class="mt-8 card-glass rounded-xl p-6">
+            <h2 class="text-2xl font-semibold text-cyan-300 mb-6 text-center flex items-center justify-center gap-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                Analizar Comentario
+            </h2>
+            
+            <div class="max-w-2xl mx-auto">
+                <div class="flex gap-3 mb-4">
+                    <input type="text" id="inputText" placeholder="Escribe un comentario sobre un producto tecnologico..." 
+                           class="flex-1 bg-slate-800 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:border-cyan-400 focus:outline-none"
+                           disabled>
+                    <button id="analyzeBtn" class="bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-medium py-3 px-6 rounded-lg transition-colors"
+                            disabled>
+                        Analizar
+                    </button>
+                </div>
+
+                <!-- Result Display -->
+                <div id="resultContainer" class="hidden result-enter">
+                    <div class="rounded-xl p-6 text-center" id="resultCard">
+                        <p class="text-sm text-slate-400 mb-2">Resultado del Analisis</p>
+                        <div class="flex items-center justify-center gap-3 mb-4">
+                            <span class="text-4xl" id="resultEmoji"></span>
+                            <span class="text-3xl font-bold" id="resultLabel"></span>
+                        </div>
+                        
+                        <div class="space-y-3 max-w-md mx-auto">
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span class="text-green-400">Positivo</span>
+                                    <span id="positivePercent" class="text-green-400">0%</span>
+                                </div>
+                                <div class="w-full bg-slate-700 rounded-full h-3">
+                                    <div id="positiveBar" class="progress-bar bg-green-500 h-3 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-sm mb-1">
+                                    <span class="text-red-400">Negativo</span>
+                                    <span id="negativePercent" class="text-red-400">0%</span>
+                                </div>
+                                <div class="w-full bg-slate-700 rounded-full h-3">
+                                    <div id="negativeBar" class="progress-bar bg-red-500 h-3 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="text-xs text-slate-500 mt-4" id="confidenceNote"></p>
+                    </div>
+                </div>
+
+                <!-- Quick Test Phrases -->
+                <div class="mt-6">
+                    <p class="text-sm text-slate-400 mb-2 text-center">Frases de prueba rapida:</p>
+                    <div class="flex flex-wrap gap-2 justify-center" id="quickTests">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center mt-10 text-slate-500 text-sm">
+            <p>Laboratorio Parcial 2 - Inteligencia Artificial | Unidad 5 & 6.4</p>
+            <p class="mt-1">Arquitectura: Modelo Secuencial con Dense Layers | NLP con Tokenizacion</p>
+        </footer>
+    </div>
+
+    <script src="dataset.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
